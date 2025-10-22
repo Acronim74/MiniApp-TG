@@ -1,0 +1,27 @@
+# Local env
+.env
+.env.*.local
+
+# Virtual environment
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Editor/OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# SQLite DB (если используешь локально — при желании оставить)
+*.db
+*.sqlite3
+
+# Node / webapp build outputs (если будут)
+node_modules/
+dist/
+build/
