@@ -17,11 +17,16 @@ Thumbs.db
 # Logs
 *.log
 
-# SQLite DB (если используешь локально — при желании оставить)
+# SQLite DB
 *.db
 *.sqlite3
 
-# Node / webapp build outputs (если будут)
+# Node / webapp build outputs
 node_modules/
 dist/
 build/
+
+# Local dev tunnel binaries (ngrok / cloudflared)
+ngrok.exe
+ngrok.zip
+cloudflared.exe
