@@ -1,0 +1,16 @@
+# Optional: Render service spec. You can either use this YAML or create service via Dashboard.
+# NOTE: do NOT include secrets here; set them in Render Dashboard's Environment settings.
+services:
+  - type: web
+    name: agentbot-web
+    env: python
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:$PORT"
+    autoDeploy: true
+    envVars:
+      - key: WEBAPP_BASE_URL
+        value: "https://<your-service-domain>.onrender.com/webapp"
+        # for security, set BOT_TOKEN, USE_JWT and JWT_SECRET via Render Dashboard (do NOT place secrets in this file)

@@ -3,3 +3,5 @@ uvicorn[standard]
 python-dotenv
 requests
 python-jose
+pydantic-settings
+gunicorn

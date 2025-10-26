@@ -1,70 +1,40 @@
 ```markdown
-# AgentBot Minimal Secure Template
+# AgentBot Minimal Secure Template — Render deployment
 
-Цель
-- Минимальный шаблон: Telegram webhook → WebApp.
-- WebApp использует Telegram WebApp initData и отправляет initData на backend.
-- Backend валидирует initData (с использованием BOT_TOKEN) и опционально возвращает JWT.
-- Шаблон ориентирован на безопасность по умолчанию, при этом можно временно отключать выдачу JWT (USE_JWT).
+Коротко: проект готов к размещению на Render (managed hosting). Ниже — быстрый сценарий деплоя и настройка webhook.
 
-Структура
-- app/
-  - main.py
-  - config.py
-  - routers/
-    - webhook.py
-    - auth.py
-  - utils/
-    - telegram_auth.py
-- webapp/
-  - index.html
-  - static/js/app.js
-- .env.example
-- requirements.txt
-- README.md
+1) Подготовка
+- Убедись, что проект закоммичен в GitHub (ветка main).
+- В корне проекта должны быть: app/, webapp/, requirements.txt, .env.example, render.yaml (опционально).
 
-Быстрый старт (Windows / PowerShell)
-1. Скопируйте `.env.example` в `.env` и заполните:
-   - BOT_TOKEN — токен вашего Telegram‑бота.
-   - WEBAPP_BASE_URL — base URL вашего webapp (например https://abcd1234.ngrok.io/webapp)
-   - USE_JWT — true|false (если true, backend вернёт JWT при /auth/init; если false, backend вернёт user info, но не токен)
+2) Деплой на Render (через веб-интерфейс)
+- Зайди на https://dashboard.render.com → New → Web Service.
+- Connect your GitHub repo → выбери ваш репозиторий и ветку main.
+- В поле Environment выбери "Python 3".
+- Build Command: оставь пустым или используй: `pip install -r requirements.txt`
+- Start Command: `gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:$PORT`
+- Создавай сервис. Дождись успешного deploy — у тебя появится публичный HTTPS URL вида https://<your-service>.onrender.com.
 
-2. Создайте и активируйте виртуальное окружение:
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-```
+3) Настройка переменных окружения (в Render Dashboard -> Environment)
+- BOT_TOKEN = <токен твоего бота>
+- WEBAPP_BASE_URL = https://<your-service>.onrender.com/webapp
+- USE_JWT = true|false
+- JWT_SECRET = <сильная секретная строка>  (только если USE_JWT=true)
 
-3. Установите зависимости:
-```powershell
-pip install -r requirements.txt
-```
+4) Обнови .env локально (по желанию)
+- Для локальной разработки оставь .env как есть, но не коммить .env в репозиторий.
 
-4. Запустите сервер:
-```powershell
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-```
+5) Установка webhook Telegram (после deploy)
+- Выполни (PowerShell):
+  $bot = "<YOUR_BOT_TOKEN>"
+  $url = "https://<your-service>.onrender.com"
+  Invoke-RestMethod -Uri "https://api.telegram.org/bot$bot/setWebhook" -Method POST -Body (@{url="$url/webhook"} | ConvertTo-Json) -ContentType "application/json"
+- Проверь getWebhookInfo:
+  Invoke-RestMethod -Uri "https://api.telegram.org/bot$bot/getWebhookInfo" | ConvertTo-Json -Depth 4
 
-5. Тест локально:
-- Откройте http://127.0.0.1:8000/health — должен вернуть {"status":"ok"}
-- Откройте webapp локально: http://127.0.0.1:8000/webapp
+6) Тест
+- Открой бота в Telegram, отправь /start → нажми «Open WebApp» → WebApp должен отправить initData на /auth/init и показать верифицированные данные.
 
-6. Тест webhook (через ngrok):
-- ngrok http 8000
-- установите webhook:
-  https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https://abcd1234.ngrok.io/webhook
-- Напишите боту /start — бот отправит сообщение с кнопкой "Open WebApp".
-- Откройте WebApp в Telegram — клиент отправит initData на backend /auth/init, backend валидирует и вернёт user info (и token если USE_JWT=true).
-
-Безопасность
-- initData проверяется сервером по алгоритму Telegram (HMAC-SHA256 с secret = SHA256(bot_token)).
-- По умолчанию шаблон использует проверку initData и не даёт токены, если USE_JWT=false.
-- В продакшне храните BOT_TOKEN и JWT_SECRET только в защищённых переменных окружения, не коммитьте .env.
-
-Дальше
-- Добавить БД (sqlite/postgres) и миграции (alembic).
-- Добавить users/agents model и endpoint для администрирования.
-- Добавить JWT flow и защиту endpoints (если USE_JWT включён).
-- Добавить upload/attachments и background-обработку.
-
+7) Что дальше
+- Добавлять базу данных, админ интерфейс, дополнительные страницы webapp, защищённые endpoints (/me и т.д.).
 ```

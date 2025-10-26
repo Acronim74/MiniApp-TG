@@ -1,4 +1,9 @@
-from pydantic import BaseSettings
+try:
+    # pydantic v1 поддерживал BaseSettings внутри pydantic
+    from pydantic import BaseSettings
+except Exception:
+    # В pydantic v2 BaseSettings вынесен в отдельный пакет pydantic-settings
+    from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
