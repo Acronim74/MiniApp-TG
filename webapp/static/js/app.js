@@ -1,153 +1,33 @@
-(function(){
-  // Diagnostic helper: write diag info to #response immediately
-  function writeDiag(obj) {
-    try {
-      document.getElementById("response").textContent = JSON.stringify(obj, null, 2);
-    } catch (e) {
-      // ignore if DOM not ready
-      console.debug("writeDiag failed", e);
-    }
+// замените существующую функцию findInitDataFromUrl на эту
+function findInitDataFromUrl() {
+  try {
+    const qs = new URLSearchParams(window.location.search);
+    if (qs.get("initData")) return qs.get("initData");
+    if (qs.get("tgWebAppInitData")) return qs.get("tgWebAppInitData");
+    if (qs.get("init_data")) return qs.get("init_data");
+  } catch (e) {
+    // ignore
   }
 
-  // try to post initData to backend
-  async function postInitData(initData) {
-    try {
-      const resp = await fetch("/auth/init", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ init_data: initData }),
-      });
-      const json = await resp.json();
-      return { ok: resp.ok, status: resp.status, body: json };
-    } catch (e) {
-      return { ok: false, status: 0, body: { error: String(e) } };
-    }
-  }
-
-  function showUser(user, raw) {
-    document.getElementById("username").textContent = user.username || user.first_name || "—";
-    document.getElementById("tid").textContent = user.id || "—";
-    document.getElementById("auth_date").textContent = user.auth_date ? new Date(user.auth_date * 1000).toLocaleString() : "—";
-    document.getElementById("greeting").textContent = user.username ? `Привет, ${user.username}!` : "Привет!";
-    document.getElementById("response").textContent = JSON.stringify(raw, null, 2);
-  }
-
-  // wait up to timeoutMs for Telegram.WebApp.initData to appear
-  async function waitForTelegramInitData(timeoutMs = 2000, intervalMs = 100) {
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
+  try {
+    // парсим хеш-параметры (#...)
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    // Telegram может положить данные в tgWebAppData (внешний браузер)
+    const tgWebAppData = hashParams.get("tgWebAppData");
+    if (tgWebAppData) {
+      // tgWebAppData содержит закодированную строку вида "query_id=...&user=...&auth_date=...&hash=..."
+      // декодируем её и вернём как подходящую init_data форму для бэкенда
       try {
-        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) {
-          console.debug("Found Telegram.WebApp.initData (poll)");
-          return window.Telegram.WebApp.initData;
-        }
+        const decoded = decodeURIComponent(tgWebAppData);
+        return decoded;
       } catch (e) {
-        // ignore
-      }
-      await new Promise(r => setTimeout(r, intervalMs));
-    }
-    return null;
-  }
-
-  // try multiple fallback locations for initData (query params, hash)
-  function findInitDataFromUrl() {
-    try {
-      const qs = new URLSearchParams(window.location.search);
-      if (qs.get("initData")) return qs.get("initData");
-      if (qs.get("tgWebAppInitData")) return qs.get("tgWebAppInitData");
-      if (qs.get("init_data")) return qs.get("init_data");
-    } catch (e) {
-      // ignore
-    }
-    try {
-      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-      if (hashParams.get("initData")) return hashParams.get("initData");
-      if (hashParams.get("tgWebAppInitData")) return hashParams.get("tgWebAppInitData");
-    } catch (e) {
-      // ignore
-    }
-    return null;
-  }
-
-  async function bootstrap() {
-    // immediate diagnostic snapshot (will be visible in UI)
-    const diagNow = {
-      timestamp: new Date().toISOString(),
-      windowTelegram: !!window.Telegram,
-      hasWebAppObj: !!(window.Telegram && window.Telegram.WebApp),
-      initDataSync: (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) || null,
-      locationHref: window.location.href,
-      locationSearch: window.location.search,
-      locationHash: window.location.hash
-    };
-    writeDiag({ diagNow, note: "If initDataSync is null, page didn't receive initData synchronously." });
-
-    console.debug("Bootstrap: attempting to obtain Telegram initData (diag snapshot written)");
-
-    // 1) direct synchronous read (fast path)
-    try {
-      if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) {
-        console.debug("Found Telegram.WebApp.initData (sync)");
-        const initData = window.Telegram.WebApp.initData;
-        const res = await postInitData(initData);
-        if (res.ok && res.body && res.body.user) {
-          showUser(res.body.user, res.body);
-          return;
-        } else {
-          document.getElementById("response").textContent = "Verification failed: " + JSON.stringify(res);
-          return;
-        }
-      }
-    } catch (e) {
-      console.debug("Error reading Telegram.WebApp.initData (sync):", e);
-    }
-
-    // 2) wait a short time for Telegram to inject the object (race condition)
-    const waitedInitData = await waitForTelegramInitData(2000, 100);
-    if (waitedInitData) {
-      const res = await postInitData(waitedInitData);
-      if (res.ok && res.body && res.body.user) {
-        showUser(res.body.user, res.body);
-        return;
-      } else {
-        document.getElementById("response").textContent = "Verification failed: " + JSON.stringify(res);
-        return;
+        return tgWebAppData;
       }
     }
-
-    // 3) fallback: query/hash params
-    const qpInit = findInitDataFromUrl();
-    if (qpInit) {
-      console.debug("Found initData in URL (fallback)");
-      const res = await postInitData(qpInit);
-      if (res.ok && res.body && res.body.user) {
-        showUser(res.body.user, res.body);
-        return;
-      } else {
-        document.getElementById("response").textContent = "Verification failed: " + JSON.stringify(res);
-        return;
-      }
-    }
-
-    // nothing found — update UI with full diagnostic so you can paste it here
-    const finalDiag = {
-      message: "No initData discovered by any method",
-      timestamp: new Date().toISOString(),
-      windowTelegram: !!window.Telegram,
-      hasWebAppObj: !!(window.Telegram && window.Telegram.WebApp),
-      initDataSync: (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) || null,
-      locationHref: window.location.href,
-      locationSearch: window.location.search,
-      locationHash: window.location.hash
-    };
-    writeDiag(finalDiag);
-    console.debug("No initData discovered; final diagnostic written to UI", finalDiag);
+    if (hashParams.get("initData")) return hashParams.get("initData");
+    if (hashParams.get("tgWebAppInitData")) return hashParams.get("tgWebAppInitData");
+  } catch (e) {
+    // ignore
   }
-
-  // run when DOM is ready
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", bootstrap);
-  } else {
-    bootstrap();
-  }
-})();
+  return null;
+}
