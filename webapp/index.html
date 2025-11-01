@@ -1,4 +1,3 @@
-```html
 <!doctype html>
 <html lang="ru">
 <head>
@@ -7,12 +6,14 @@
   <title>AgentBot — WebApp (Minimal Secure)</title>
   <style>
     body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 2rem; background:#f7f8fb; color:#111; }
-    .card { background:#fff; padding:1.5rem; border-radius:8px; box-shadow:0 2px 8px rgba(16,24,40,0.06); max-width:680px; margin:auto;}
+    .card { background:#fff; padding:1.5rem; border-radius:8px; box-shadow:0 2px 8px rgba(16,24,40,0.06); max-width:880px; margin:auto;}
     h1 { margin:0 0 .5rem 0; }
     p.meta { color:#555; margin-top: .5rem; }
     .field { font-weight:600; }
     .small { color:#666; font-size:.9rem; }
-    pre { background:#f3f4f6; padding:.75rem; border-radius:6px; overflow:auto }
+    pre { background:#f3f4f6; padding:.75rem; border-radius:6px; overflow:auto; white-space:pre-wrap; word-break:break-word; }
+    .controls { margin-top: .75rem; display:flex; gap:.5rem; flex-wrap:wrap; }
+    button { padding:.5rem .75rem; border-radius:6px; border:1px solid #ddd; background:#f8f9fb; cursor:pointer; }
   </style>
 </head>
 <body>
@@ -30,8 +31,57 @@
 
     <h3>Raw verified response</h3>
     <pre id="response">—</pre>
+
+    <h3>Diagnostics</h3>
+    <p class="small">Отображаются значения, доступные странице (window.Telegram, WebApp.initData, location.href/hash).</p>
+    <pre id="diag">—</pre>
+
+    <div class="controls">
+      <button id="send-raw">Send raw initData to /auth/init</button>
+      <button id="reload">Reload</button>
+    </div>
   </div>
 
   <script src="static/js/app.js"></script>
+  <script>
+    // small helper for manual testing: send raw percent-encoded tgWebAppData (if present) or initData from Telegram API
+    document.getElementById('send-raw').addEventListener('click', async function() {
+      // try raw tgWebAppData in hash first (percent-encoded)
+      const hash = window.location.hash || "";
+      const match = hash.match(/(?:#|&)?tgWebAppData=([^&]+)/);
+      let initDataCandidate = null;
+      if (match && match[1]) {
+        initDataCandidate = match[1]; // raw percent-encoded fragment (we send as-is)
+      } else {
+        try {
+          if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) {
+            initDataCandidate = window.Telegram.WebApp.initData;
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      if (!initDataCandidate) {
+        alert("No initData found in WebApp (try opening from Telegram client or check location.hash).");
+        return;
+      }
+
+      // POST to backend
+      try {
+        const resp = await fetch('/auth/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ init_data: initDataCandidate })
+        });
+        const json = await resp.json();
+        document.getElementById('response').textContent = "Manual send result: " + JSON.stringify(json, null, 2);
+      } catch (e) {
+        document.getElementById('response').textContent = "Manual send failed: " + String(e);
+      }
+    });
+
+    document.getElementById('reload').addEventListener('click', () => location.reload());
+  </script>
 </body>
 </html>

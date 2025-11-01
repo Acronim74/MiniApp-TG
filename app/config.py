@@ -27,6 +27,8 @@ class Settings:
             "WEBAPP_BASE_URL",
             "https://miniapp-tg-uubc.onrender.com/webapp/index.html",
         )
+        # Доп. флаг: если true — webhook пришлёт в чат DEBUG сообщение с payload, который он отправляет в Telegram
+        self.DEBUG_SHOW_PAYLOAD: bool = _coerce_bool(os.getenv("DEBUG_SHOW_PAYLOAD"))
         self.USE_JWT: bool = _coerce_bool(os.getenv("USE_JWT"))
         self.JWT_SECRET: str | None = os.getenv("JWT_SECRET") or None
 

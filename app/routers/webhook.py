@@ -12,8 +12,9 @@ logger = logging.getLogger("app.webhook")
 @router.post("/webhook")
 async def telegram_webhook(req: Request):
     """
-    Telegram webhook with extra debug logging:
+    Telegram webhook with extra debug logging and optional chat debug message:
     - logs incoming update JSON
+    - if DEBUG_SHOW_PAYLOAD enabled -> sends a debug message to the same chat with the payload that will be sent to Telegram API
     - logs full Telegram response body if sendMessage fails
     """
     try:
@@ -53,12 +54,27 @@ async def telegram_webhook(req: Request):
 
     text = "Откройте WebApp, чтобы продолжить (в нем будет использован Telegram initData для безопасного входа)."
 
+    # If BOT_TOKEN missing — don't call Telegram API (keep behavior)
     if not settings.BOT_TOKEN:
         logger.warning("BOT_TOKEN not set; built url: %s", webapp_url)
         return JSONResponse({"ok": True, "webapp_url": webapp_url})
 
     send_url = f"https://api.telegram.org/bot{settings.BOT_TOKEN}/sendMessage"
     payload = {"chat_id": telegram_id, "text": text, "reply_markup": reply_markup}
+
+    # Optional: send a debugging message to the chat with the payload we are about to send
+    if settings.DEBUG_SHOW_PAYLOAD:
+        try:
+            debug_text = "DEBUG: will send the following payload to Telegram API:\n" + json.dumps(payload, ensure_ascii=False, indent=2)
+            debug_payload = {"chat_id": telegram_id, "text": debug_text}
+            # send as a separate message (silent)
+            debug_resp = requests.post(send_url, json=debug_payload, timeout=10)
+            if not debug_resp.ok:
+                logger.warning("Failed to send debug message to chat: status=%s body=%s", debug_resp.status_code, debug_resp.text)
+            else:
+                logger.info("Sent debug message to chat_id=%s", telegram_id)
+        except Exception as e:
+            logger.exception("Failed to send debug message to Telegram: %s", e)
 
     try:
         resp = requests.post(send_url, json=payload, timeout=10)
