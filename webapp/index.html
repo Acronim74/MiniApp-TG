@@ -14,6 +14,8 @@
     pre { background:#f3f4f6; padding:.75rem; border-radius:6px; overflow:auto; white-space:pre-wrap; word-break:break-word; }
     .controls { margin-top: .75rem; display:flex; gap:.5rem; flex-wrap:wrap; }
     button { padding:.5rem .75rem; border-radius:6px; border:1px solid #ddd; background:#f8f9fb; cursor:pointer; }
+    .muted { color:#666; font-size:.9rem; }
+    .small-note { font-size:.85rem; color:#666; margin-top:.5rem; }
   </style>
 </head>
 <body>
@@ -33,39 +35,90 @@
     <pre id="response">—</pre>
 
     <h3>Diagnostics</h3>
-    <p class="small">Отображаются значения, доступные странице (window.Telegram, WebApp.initData, location.href/hash).</p>
+    <p class="small">Отображаются значения, доступные странице (window.Telegram, WebApp.initData, location.href/hash) и строки, которые будет отправлена на бэкенд.</p>
     <pre id="diag">—</pre>
 
     <div class="controls">
       <button id="send-raw">Send raw initData to /auth/init</button>
       <button id="reload">Reload</button>
     </div>
+
+    <p class="small-note">Если вы ожидаете, что WebApp откроется внутри Telegram, откройте кнопку "Open WebApp" в официальном клиенте (mobile/desktop), не в внешнем браузере. Если Telegram открывает наружный браузер, включённый fallback попытается взять tgWebAppData из hash.</p>
   </div>
 
   <script src="static/js/app.js"></script>
   <script>
-    // small helper for manual testing: send raw percent-encoded tgWebAppData (if present) or initData from Telegram API
-    document.getElementById('send-raw').addEventListener('click', async function() {
-      // try raw tgWebAppData in hash first (percent-encoded)
+    // Helper functions for diagnostics and manual send
+    function getRawTgWebAppDataFromHash() {
       const hash = window.location.hash || "";
-      const match = hash.match(/(?:#|&)?tgWebAppData=([^&]+)/);
-      let initDataCandidate = null;
-      if (match && match[1]) {
-        initDataCandidate = match[1]; // raw percent-encoded fragment (we send as-is)
-      } else {
-        try {
-          if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) {
-            initDataCandidate = window.Telegram.WebApp.initData;
-          }
-        } catch (e) {
-          // ignore
+      const m = hash.match(/(?:#|&)?tgWebAppData=([^&]+)/);
+      return (m && m[1]) ? m[1] : null; // percent-encoded fragment (raw)
+    }
+
+    function decodePercentFragment(fragment) {
+      try {
+        return decodeURIComponent(fragment);
+      } catch (e) {
+        return fragment;
+      }
+    }
+
+    function buildDiag() {
+      const diag = {
+        timestamp: new Date().toISOString(),
+        windowTelegram: !!window.Telegram,
+        hasWebAppObj: !!(window.Telegram && window.Telegram.WebApp),
+        initDataSync: null,
+        locationHref: window.location.href,
+        locationSearch: window.location.search,
+        locationHash: window.location.hash,
+        raw_tgWebAppData_fragment: null,
+        decoded_inner_init_data: null
+      };
+
+      try {
+        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) {
+          diag.initDataSync = window.Telegram.WebApp.initData;
         }
+      } catch (e) {
+        diag.initDataSync = null;
       }
 
-      if (!initDataCandidate) {
+      const rawFrag = getRawTgWebAppDataFromHash();
+      if (rawFrag) {
+        diag.raw_tgWebAppData_fragment = rawFrag;
+        diag.decoded_inner_init_data = decodePercentFragment(rawFrag);
+      }
+
+      return diag;
+    }
+
+    function showDiag() {
+      const d = buildDiag();
+      document.getElementById('diag').textContent = JSON.stringify(d, null, 2);
+      return d;
+    }
+
+    // Manual send: send either raw tgWebAppData fragment (percent-encoded)
+    // or WebApp.initData if present.
+    document.getElementById('send-raw').addEventListener('click', async function() {
+      const diag = showDiag();
+      let initDataCandidate = null;
+      let sentAs = null;
+
+      if (diag.raw_tgWebAppData_fragment) {
+        initDataCandidate = diag.raw_tgWebAppData_fragment; // raw percent-encoded
+        sentAs = "raw_percent_encoded_fragment_from_hash";
+      } else if (diag.initDataSync) {
+        initDataCandidate = diag.initDataSync;
+        sentAs = "window.Telegram.WebApp.initData";
+      } else {
         alert("No initData found in WebApp (try opening from Telegram client or check location.hash).");
         return;
       }
+
+      // Show what we are about to send
+      document.getElementById('response').textContent = "Manual send (init_data candidate):\n" + initDataCandidate + "\n\nSending to /auth/init...";
 
       // POST to backend
       try {
@@ -74,14 +127,26 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ init_data: initDataCandidate })
         });
-        const json = await resp.json();
-        document.getElementById('response').textContent = "Manual send result: " + JSON.stringify(json, null, 2);
+        let json;
+        try {
+          json = await resp.json();
+        } catch (e) {
+          json = { error: "invalid json from backend", status: resp.status, text: await resp.text() };
+        }
+        document.getElementById('response').textContent = "Manual send result (sent_as: " + sentAs + "):\n" + JSON.stringify(json, null, 2);
       } catch (e) {
         document.getElementById('response').textContent = "Manual send failed: " + String(e);
       }
     });
 
     document.getElementById('reload').addEventListener('click', () => location.reload());
+
+    // show diag immediately on load
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", showDiag);
+    } else {
+      showDiag();
+    }
   </script>
 </body>
 </html>
