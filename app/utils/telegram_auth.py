@@ -50,15 +50,16 @@ def verify_init_data(init_data: str, bot_token: str) -> Tuple[bool, Dict[str, An
     hmac_hash = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
 
     if not hmac.compare_digest(hmac_hash, provided_hash):
-        # Detailed debug logging to diagnose mismatch
+        # Log full details at WARNING so they appear in Render logs
         try:
             logger.warning("init_data verification failed: hash_mismatch")
-            logger.debug("init_data (raw): %s", init_data)
-            logger.debug("parsed fields: %s", parsed)
-            logger.debug("data_check_string: %s", data_check_string)
-            logger.debug("secret_key (SHA256(bot_token)) hex: %s", hashlib.sha256(bot_token.encode("utf-8")).hexdigest())
-            logger.debug("computed_hmac: %s", hmac_hash)
-            logger.debug("provided_hash: %s", provided_hash)
+            logger.warning("init_data (raw): %s", init_data)
+            logger.warning("parsed fields: %s", parsed)
+            logger.warning("data_check_string: %s", data_check_string)
+            # secret_key hex (not the bot token itself)
+            logger.warning("secret_key (SHA256(bot_token)) hex: %s", hashlib.sha256(bot_token.encode("utf-8")).hexdigest())
+            logger.warning("computed_hmac: %s", hmac_hash)
+            logger.warning("provided_hash: %s", provided_hash)
         except Exception:
             logger.exception("Failed while logging debug info for hash_mismatch")
         return False, "hash_mismatch"
