@@ -1,4 +1,14 @@
 (function(){
+  // Diagnostic helper: write diag info to #response immediately
+  function writeDiag(obj) {
+    try {
+      document.getElementById("response").textContent = JSON.stringify(obj, null, 2);
+    } catch (e) {
+      // ignore if DOM not ready
+      console.debug("writeDiag failed", e);
+    }
+  }
+
   // try to post initData to backend
   async function postInitData(initData) {
     try {
@@ -60,7 +70,19 @@
   }
 
   async function bootstrap() {
-    console.debug("Bootstrap: attempting to obtain Telegram initData");
+    // immediate diagnostic snapshot (will be visible in UI)
+    const diagNow = {
+      timestamp: new Date().toISOString(),
+      windowTelegram: !!window.Telegram,
+      hasWebAppObj: !!(window.Telegram && window.Telegram.WebApp),
+      initDataSync: (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) || null,
+      locationHref: window.location.href,
+      locationSearch: window.location.search,
+      locationHash: window.location.hash
+    };
+    writeDiag({ diagNow, note: "If initDataSync is null, page didn't receive initData synchronously." });
+
+    console.debug("Bootstrap: attempting to obtain Telegram initData (diag snapshot written)");
 
     // 1) direct synchronous read (fast path)
     try {
@@ -93,7 +115,7 @@
       }
     }
 
-    // 3) fallback: query/hash params (only for quick local demo or non-standard clients)
+    // 3) fallback: query/hash params
     const qpInit = findInitDataFromUrl();
     if (qpInit) {
       console.debug("Found initData in URL (fallback)");
@@ -107,10 +129,25 @@
       }
     }
 
-    // nothing found
-    document.getElementById("response").textContent = "No initData found. Open WebApp from Telegram client to send initData.";
-    console.debug("No initData discovered by any method");
+    // nothing found — update UI with full diagnostic so you can paste it here
+    const finalDiag = {
+      message: "No initData discovered by any method",
+      timestamp: new Date().toISOString(),
+      windowTelegram: !!window.Telegram,
+      hasWebAppObj: !!(window.Telegram && window.Telegram.WebApp),
+      initDataSync: (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) || null,
+      locationHref: window.location.href,
+      locationSearch: window.location.search,
+      locationHash: window.location.hash
+    };
+    writeDiag(finalDiag);
+    console.debug("No initData discovered; final diagnostic written to UI", finalDiag);
   }
 
-  bootstrap();
+  // run when DOM is ready
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bootstrap);
+  } else {
+    bootstrap();
+  }
 })();
