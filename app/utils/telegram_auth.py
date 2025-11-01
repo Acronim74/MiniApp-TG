@@ -12,6 +12,9 @@ from typing import Tuple, Dict, Any
 import hashlib
 import hmac
 import urllib.parse
+import logging
+
+logger = logging.getLogger("app.telegram_auth")
 
 
 def parse_init_data(init_data: str) -> Dict[str, str]:
@@ -47,6 +50,17 @@ def verify_init_data(init_data: str, bot_token: str) -> Tuple[bool, Dict[str, An
     hmac_hash = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
 
     if not hmac.compare_digest(hmac_hash, provided_hash):
+        # Detailed debug logging to diagnose mismatch
+        try:
+            logger.warning("init_data verification failed: hash_mismatch")
+            logger.debug("init_data (raw): %s", init_data)
+            logger.debug("parsed fields: %s", parsed)
+            logger.debug("data_check_string: %s", data_check_string)
+            logger.debug("secret_key (SHA256(bot_token)) hex: %s", hashlib.sha256(bot_token.encode("utf-8")).hexdigest())
+            logger.debug("computed_hmac: %s", hmac_hash)
+            logger.debug("provided_hash: %s", provided_hash)
+        except Exception:
+            logger.exception("Failed while logging debug info for hash_mismatch")
         return False, "hash_mismatch"
 
     # optionally convert types (auth_date -> int)
