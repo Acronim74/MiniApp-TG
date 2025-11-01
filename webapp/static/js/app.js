@@ -42,6 +42,7 @@
   // try multiple fallback locations for initData (query params, hash)
   function findInitDataFromUrl() {
     try {
+      // first try regular query params (decoded)
       const qs = new URLSearchParams(window.location.search);
       if (qs.get("initData")) return qs.get("initData");
       if (qs.get("tgWebAppInitData")) return qs.get("tgWebAppInitData");
@@ -51,21 +52,19 @@
     }
 
     try {
-      // parse hash parameters (#...)
-      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-      // 1) Telegram may put data into tgWebAppData when page opened in external browser
-      const tgWebAppData = hashParams.get("tgWebAppData");
-      if (tgWebAppData) {
-        // tgWebAppData is an encoded query-like string: "query_id=...&user=...&auth_date=...&hash=..."
-        // decode it and return as init_data (backend expects query-string format)
-        try {
-          const decoded = decodeURIComponent(tgWebAppData);
-          return decoded;
-        } catch (e) {
-          return tgWebAppData;
-        }
+      // IMPORTANT: If Telegram opened the page in an external browser it may put
+      // data in the hash as tgWebAppData. We must prefer the RAW substring from
+      // location.hash (percent-encoded) to avoid modifying the original string
+      // used by Telegram to compute the hash.
+      const hash = window.location.hash || "";
+      const match = hash.match(/(?:#|&)?tgWebAppData=([^&]+)/);
+      if (match && match[1]) {
+        // return the raw percent-encoded fragment (DO NOT decode here)
+        return match[1];
       }
-      // 2) other possible hash keys
+
+      // fallback to parsed hash params (decoded) if tgWebAppData key not found
+      const hashParams = new URLSearchParams(hash.replace(/^#/, ""));
       if (hashParams.get("initData")) return hashParams.get("initData");
       if (hashParams.get("tgWebAppInitData")) return hashParams.get("tgWebAppInitData");
       if (hashParams.get("init_data")) return hashParams.get("init_data");
@@ -109,7 +108,7 @@
       }
     }
 
-    // 3) fallback: query/hash params (including tgWebAppData)
+    // 3) fallback: query/hash params (including raw tgWebAppData)
     const qpInit = findInitDataFromUrl();
     if (qpInit) {
       console.debug("Found initData in URL/hash (fallback)");
